@@ -11,7 +11,7 @@
 <style>
 /* ─────────────────────────────────────────────────────────────
    Vizuální systém: emailová cedule budapešťského metra.
-   Každý balíček = jedna linka metra, ve skutečných barvách BKK.
+   Každý balíček = jedna linka metra ve skutečných barvách BKK.
    Světlý podklad schválně — hraje se venku v červencovém slunci.
    ───────────────────────────────────────────────────────────── */
 :root{
@@ -137,6 +137,25 @@ h2{font-family:var(--disp);font-weight:700;font-size:15px;text-transform:upperca
 .claim button:focus-visible{outline:2px solid var(--m2);outline-offset:2px}
 li.taken .nm{opacity:.45;text-decoration:line-through}
 
+/* synchronizace */
+.sync{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  display:flex;align-items:center;gap:6px;color:var(--ink-soft);flex:1;min-width:150px}
+.sync::before{content:'';width:9px;height:9px;border-radius:50%;background:var(--rule);flex:0 0 9px}
+.sync.ok::before{background:var(--m4)}
+.sync.err::before{background:var(--m2)}
+.me{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10.5px;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--ink-soft)}
+.me button{width:28px;height:28px;border:1.5px solid var(--rule);background:transparent;
+  font-family:var(--disp);font-weight:700;font-size:15px;cursor:pointer;color:var(--ink-soft)}
+.me button[aria-pressed="true"]{background:var(--oxblood);border-color:var(--oxblood);color:#F4E9D8}
+.me button:focus-visible{outline:2px solid var(--m2);outline-offset:2px}
+.feed{list-style:none;margin:0;padding:0;font-size:13.5px}
+.feed li{padding:8px 0;border-bottom:1px solid var(--rule);display:flex;gap:9px;align-items:flex-start}
+.feed .who{font-family:var(--disp);font-weight:700;font-size:15px;line-height:1.1;flex:0 0 20px;
+  text-align:center;border:1.5px solid var(--ink);padding:1px 0}
+.feed .when{font-family:var(--mono);font-size:10px;color:var(--ink-soft);flex:0 0 42px;padding-top:3px}
+.feed .none{color:var(--ink-soft);font-style:italic;border:0}
+
 /* skóre */
 .score{position:fixed;left:0;right:0;bottom:0;background:var(--ink);color:var(--paper);
   display:flex;z-index:20;padding-bottom:env(safe-area-inset-bottom)}
@@ -154,7 +173,7 @@ li.taken .nm{opacity:.45;text-decoration:line-through}
 
 /* tisk: všechny karty na papír k rozstříhání */
 @media print{
-  header,nav,.draw,.row,.chips,.score,.note,#hist-sec,#app{display:none!important}
+  header,nav,.draw,.row,.chips,.score,.note,#hist-sec,#feed-sec,#app,#statues{display:none!important}
   body{background:#fff;font-size:11px}
   .wrap{max-width:none;padding:0}
   #print{display:block!important}
@@ -198,7 +217,20 @@ li.taken .nm{opacity:.45;text-decoration:line-through}
     <button class="ghost" id="anyBtn">Cokoliv</button>
   </div>
 
+  <div class="row">
+    <span class="sync" id="sync">jen tento telefon</span>
+    <span class="me">Jsem
+      <button data-me="a" aria-pressed="false">A</button>
+      <button data-me="b" aria-pressed="false">B</button>
+    </span>
+  </div>
+
   <div class="chips" id="chips"></div>
+
+  <section id="feed-sec" class="hidden">
+    <h2>Co dělá druhý tým</h2>
+    <ul class="feed" id="feed"></ul>
+  </section>
 
   <section id="hist-sec">
     <h2>Poslední tažené</h2>
@@ -224,8 +256,20 @@ li.taken .nm{opacity:.45;text-decoration:line-through}
 
 <script>
 /* ═══════════════════════════════════════════════════════════════
-   DATA — tady se edituje. Přidat kartu = přidat řádek do pole.
-   q = otázky, c = prokletí, b = úkoly (body), s = sošky (body)
+   1) SYNCHRONIZACE — jediné, co je potřeba vyplnit
+   Prázdné url = appka běží jen na tomhle telefonu.
+   Vyplněné    = skóre, sošky a feed se sdílí mezi všemi.
+   Adresu získáš ve Firebase → Build → Realtime Database.
+   Bez lomítka na konci!
+   ═══════════════════════════════════════════════════════════════ */
+const SYNC={
+  url:'',            // 'https://neco-default-rtdb.europe-west1.firebasedatabase.app'
+  room:'budapest'    // stejné pro všechny telefony
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   2) DATA — tady se edituje. Přidat kartu = přidat řádek.
+   t = text (může obsahovat HTML), k = kategorie, p = body, n = poznámka
    ═══════════════════════════════════════════════════════════════ */
 const DECKS = {
 q:{ name:'Kérdés', cs:'Otázka', pre:'K', color:'var(--m1)', cards:[
@@ -334,15 +378,49 @@ s:{ name:'Szobor', cs:'Soška', pre:'Sz', color:'var(--m4)', cards:[
 ]}
 };
 
-/* ═══════════════ LOGIKA ═══════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   3) LOGIKA — tady už není potřeba nic měnit
+   ═══════════════════════════════════════════════════════════════ */
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-let S={deck:'q',used:{q:[],c:[],b:[],s:[]},hist:[],filt:[],claim:{},a:0,b:0};
+let S={deck:'q',used:{q:[],c:[],b:[],s:[]},hist:[],filt:[],claim:{},a:0,b:0,me:''};
+let feed=[], net=null, dirty=0;
 
-/* stav v URL — přežije refresh, nepoužívá žádné úložiště prohlížeče */
+/* lokální stav v adrese stránky — refresh ho nesmaže */
 function save(){try{history.replaceState(null,'','#'+encodeURIComponent(JSON.stringify(S)))}catch(e){}}
 function load(){try{const h=location.hash.slice(1);if(h)S=Object.assign(S,JSON.parse(decodeURIComponent(h)))}catch(e){}}
 
+/* sdílený stav přes Firebase Realtime Database (REST, bez SDK) */
+const live=()=>!!SYNC.url, base=()=>`${SYNC.url}/rooms/${SYNC.room}`;
+async function send(path,method,val){
+  if(!live())return;
+  dirty=Date.now();
+  try{
+    await fetch(`${base()}/${path}.json`,{method,body:val===undefined?undefined:JSON.stringify(val)});
+    net=true;
+  }catch(e){net=false}
+}
+const put=(p,v)=>send(p,'PUT',v);
+const drop=p=>send(p,'DELETE');
+const log=txt=>{if(S.me)send('feed','POST',{t:Date.now(),w:S.me,x:txt})};
+
+async function pull(){
+  if(!live())return;
+  try{
+    const r=await fetch(`${base()}.json`,{cache:'no-store'});
+    const d=await r.json()||{};
+    net=true;
+    if(Date.now()-dirty>2000){          // nepřepisuj to, co jsem právě klikl
+      S.a=(d.score&&d.score.a)||0;
+      S.b=(d.score&&d.score.b)||0;
+      S.claim=d.claim||{};
+    }
+    feed=Object.values(d.feed||{}).sort((x,y)=>y.t-x.t).slice(0,12);
+    update();
+  }catch(e){net=false;update()}
+}
+
 const cats=d=>[...new Set(DECKS[d].cards.map(c=>c.k))];
+const cid=(d,i)=>`${DECKS[d].pre}-${String(i+1).padStart(2,'0')}`;
 const pool=d=>DECKS[d].cards.map((c,i)=>i)
   .filter(i=>!S.used[d].includes(i))
   .filter(i=>d!=='q'||!S.filt.length||S.filt.includes(DECKS[d].cards[i].k));
@@ -350,10 +428,9 @@ const pool=d=>DECKS[d].cards.map((c,i)=>i)
 function renderCard(d,i){
   const c=DECKS[d].cards[i], D=DECKS[d], el=$('#card');
   el.className='card drawn'; el.style.setProperty('--accent',D.color);
-  const dark=d!=='q';
-  el.querySelector('.bar').style.color=dark?'#fff':'#111';
-  el.querySelector('.bar').innerHTML=
-    `<div class="name">${D.name}<span>${D.cs}</span></div><div class="id">${D.pre}-${String(i+1).padStart(2,'0')}</div>`;
+  const bar=el.querySelector('.bar');
+  bar.style.color = d==='q' ? '#111' : '#fff';
+  bar.innerHTML=`<div class="name">${D.name}<span>${D.cs}</span></div><div class="id">${cid(d,i)}</div>`;
   el.querySelector('.body').innerHTML=
     `<div class="text">${c.t}</div><div class="meta"><span>${c.k}</span>${
       c.n?`<span>${c.n}</span>`:''}${c.p!==undefined?`<span class="pts">${c.p} P</span>`:''}</div>`;
@@ -365,39 +442,12 @@ function draw(d){
   const i=p[Math.floor(Math.random()*p.length)];
   S.used[d].push(i);
   S.hist.unshift({d,i}); S.hist=S.hist.slice(0,8);
+  log(`${DECKS[d].name} ${cid(d,i)} — ${DECKS[d].cards[i].t.replace(/<[^>]+>/g,'')}`);
   renderCard(d,i); update();
 }
 
-function update(){
-  const d=S.deck, D=DECKS[d];
-  $$('nav button').forEach(b=>b.setAttribute('aria-selected',b.dataset.deck===d));
-  const isS=d==='s';
-  $('#app').classList.toggle('hidden',isS);
-  $('#statues').classList.toggle('hidden',!isS);
-  if(isS){renderStatues()}
-  else{
-    const left=pool(d).length, tot=D.cards.length;
-    $('#counter').textContent=`zbývá ${left} z ${tot}`;
-    $('#drawBtn').disabled=!left;
-    $('#drawBtn').textContent=left?'Húz — táhnout':'Balíček je prázdný';
-    $('#chips').innerHTML = d==='q'
-      ? cats('q').map(k=>`<button class="chip" data-k="${k}" aria-pressed="${S.filt.includes(k)}">${k}</button>`).join('')
-      : '';
-    $('#hist').innerHTML = S.hist.length
-      ? S.hist.map(h=>`<li><b>${DECKS[h.d].pre}-${String(h.i+1).padStart(2,'0')}</b><span>${
-          DECKS[h.d].cards[h.i].t.replace(/<[^>]+>/g,'')}</span></li>`).join('')
-      : '<li class="none">Zatím nic.</li>';
-  }
-  $('#sa').textContent=S.a; $('#sb').textContent=S.b;
-  $('#note').textContent = isS
-    ? 'Klepnutím na A nebo B přiřadíš sošku týmu a body se připíšou do skóre.'
-    : 'Stav (skóre, tažené karty, sošky) drží adresa v prohlížeči — refresh ho nesmaže, ale nový tab ano. Chceš stejný stav na druhém telefonu? Pošli si odkaz.';
-  save();
-}
-
 function renderStatues(){
-  const cs=DECKS.s.cards;
-  const done=Object.keys(S.claim).length;
+  const cs=DECKS.s.cards, done=Object.keys(S.claim).length;
   $('#stProgress').textContent=`nalezeno ${done} z ${cs.length} · ${
     cs.reduce((a,c,i)=>a+(S.claim[i]?c.p:0),0)} P rozděleno`;
   $('#stList').innerHTML=cs.map((c,i)=>`<li class="${S.claim[i]?'taken':''}">
@@ -408,13 +458,61 @@ function renderStatues(){
     </div></li>`).join('');
 }
 
+function update(){
+  const d=S.deck, D=DECKS[d], isS=d==='s';
+  $$('nav button').forEach(b=>b.setAttribute('aria-selected',b.dataset.deck===d));
+  $('#app').classList.toggle('hidden',isS);
+  $('#statues').classList.toggle('hidden',!isS);
+
+  if(isS){ renderStatues() }
+  else{
+    const left=pool(d).length;
+    $('#counter').textContent=`zbývá ${left} z ${D.cards.length}`;
+    $('#drawBtn').disabled=!left;
+    $('#drawBtn').textContent=left?'Húz — táhnout':'Balíček je prázdný';
+    $('#chips').innerHTML = d==='q'
+      ? cats('q').map(k=>`<button class="chip" data-k="${k}" aria-pressed="${S.filt.includes(k)}">${k}</button>`).join('')
+      : '';
+    $('#hist').innerHTML = S.hist.length
+      ? S.hist.map(h=>`<li><b>${cid(h.d,h.i)}</b><span>${
+          DECKS[h.d].cards[h.i].t.replace(/<[^>]+>/g,'')}</span></li>`).join('')
+      : '<li class="none">Zatím nic.</li>';
+
+    const sy=$('#sync');
+    sy.className='sync'+(live()?(net===false?' err':net?' ok':''):'');
+    sy.textContent=!live()?'jen tento telefon'
+      :net===false?'spojení vypadlo'
+      :net?`sdíleno · ${SYNC.room}`:'připojuji…';
+    $$('.me button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.me===S.me));
+    $('#feed-sec').classList.toggle('hidden',!live());
+    if(live()){
+      $('#feed').innerHTML = feed.length
+        ? feed.map(f=>`<li><span class="who">${(f.w||'?').toUpperCase()}</span>
+            <span class="when">${new Date(f.t).toTimeString().slice(0,5)}</span>
+            <span>${f.x}</span></li>`).join('')
+        : '<li class="none">Zatím ticho.</li>';
+    }
+  }
+
+  $('#sa').textContent=S.a; $('#sb').textContent=S.b;
+  $('#note').textContent = isS
+    ? 'Klepnutím na A nebo B přiřadíš sošku týmu a body se připíšou do skóre.'
+    : live()
+      ? 'Skóre, sošky a feed jsou společné pro všechny telefony. Balíček má každý svůj — táhnutá karta zmizí jen tobě.'
+      : 'Běží jen lokálně. Stav drží adresa v prohlížeči, refresh ho nesmaže. Sdílení se zapíná v SYNC nahoře v kódu.';
+  save();
+}
+
 /* události */
 $$('nav button').forEach(b=>b.onclick=()=>{S.deck=b.dataset.deck;update()});
 $('#drawBtn').onclick=()=>draw(S.deck);
 $('#shuffleBtn').onclick=()=>{
-  if(S.deck==='s'){if(confirm('Vynulovat všechny sošky a jejich body?')){
-    Object.keys(S.claim).forEach(i=>{const t=S.claim[i];S[t]-=DECKS.s.cards[i].p});S.claim={}}}
-  else S.used[S.deck]=[];
+  if(S.deck==='s'){
+    if(confirm('Vynulovat všechny sošky a jejich body?')){
+      Object.keys(S.claim).forEach(i=>{const t=S.claim[i];S[t]-=DECKS.s.cards[i].p});
+      S.claim={}; drop('claim'); put('score/a',S.a); put('score/b',S.b);
+    }
+  } else S.used[S.deck]=[];
   update();
 };
 $('#anyBtn').onclick=()=>{
@@ -431,19 +529,31 @@ $('#stList').onclick=e=>{
   const b=e.target.closest('button'); if(!b)return;
   const i=b.dataset.i, t=b.dataset.t, p=DECKS.s.cards[i].p, prev=S.claim[i];
   if(prev)S[prev]-=p;
-  if(prev===t){delete S.claim[i]}else{S.claim[i]=t;S[t]+=p}
+  if(prev===t){ delete S.claim[i]; drop(`claim/${i}`) }
+  else{ S.claim[i]=t; S[t]+=p; put(`claim/${i}`,t); log(`našel sošku ${DECKS.s.cards[i].t} (+${p} P)`) }
+  if(prev)put(`score/${prev}`,S[prev]);
+  put(`score/${t}`,S[t]);
   update();
 };
-$$('.score button').forEach(b=>b.onclick=()=>{S[b.dataset.t]+=+b.dataset.d;update()});
+$$('.score button').forEach(b=>b.onclick=()=>{
+  const t=b.dataset.t; S[t]+=+b.dataset.d; put(`score/${t}`,S[t]); update();
+});
+$$('.me button').forEach(b=>b.onclick=()=>{S.me=S.me===b.dataset.me?'':b.dataset.me;update()});
 
 /* tiskový arch */
 $('#print').innerHTML=Object.entries(DECKS).map(([d,D])=>
   `<div class="sheet">${D.cards.map((c,i)=>`<div class="pc">
-    <div class="h"><span>${D.name}</span><span>${D.pre}-${String(i+1).padStart(2,'0')}</span></div>
+    <div class="h"><span>${D.name}</span><span>${cid(d,i)}</span></div>
     <div class="t">${c.t}</div>
     <div class="m">${c.k}${c.p!==undefined?' · '+c.p+' P':''}</div></div>`).join('')}</div>`).join('');
 
+/* start */
 load(); update();
+if(live()){
+  pull();
+  setInterval(pull,3000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)pull()});
+}
 </script>
 </body>
 </html>
