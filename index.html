@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Budapest Grand Prix — kartičky</title>
+<meta name="theme-color" content="#5E1A20">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────────────────────
+   Vizuální systém: emailová cedule budapešťského metra.
+   Každý balíček = jedna linka metra, ve skutečných barvách BKK.
+   Světlý podklad schválně — hraje se venku v červencovém slunci.
+   ───────────────────────────────────────────────────────────── */
+:root{
+  --ink:#17181C;
+  --ink-soft:#5A5D63;
+  --paper:#E3E2D8;
+  --card:#FBFAF6;
+  --rule:#C3C2B6;
+  --oxblood:#5E1A20;
+  --m1:#F2B705;  /* Kérdés  — otázky */
+  --m2:#C8353B;  /* Átok    — prokletí */
+  --m3:#0B62A8;  /* Feladat — úkoly */
+  --m4:#00915A;  /* Szobor  — sošky */
+  --disp:'Barlow Condensed','Arial Narrow',system-ui,sans-serif;
+  --body:ui-sans-serif,-apple-system,'Segoe UI',Roboto,Helvetica,sans-serif;
+  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper);color:var(--ink);font-family:var(--body);
+  font-size:17px;line-height:1.45;-webkit-text-size-adjust:100%;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.wrap{max-width:640px;margin:0 auto;padding:0 14px 90px}
+
+/* hlavička */
+header{background:var(--oxblood);color:#F4E9D8;margin:0 -14px 0;padding:14px 16px 12px}
+header .kicker{font-family:var(--mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;opacity:.72}
+header h1{font-family:var(--disp);font-weight:700;font-size:34px;line-height:.95;letter-spacing:-.01em;margin:4px 0 0;text-transform:uppercase}
+header .sub{font-size:12px;opacity:.75;margin-top:5px}
+
+/* výběr balíčku — pruhy linek metra */
+nav{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin:0 -14px 18px;border-bottom:3px solid var(--ink)}
+nav button{
+  appearance:none;border:0;border-right:1px solid rgba(0,0,0,.25);cursor:pointer;
+  padding:11px 4px 9px;background:#B9B8AE;color:rgba(0,0,0,.55);
+  font-family:var(--disp);font-weight:700;font-size:19px;line-height:1;text-transform:uppercase;
+  transition:background .12s,color .12s;
+}
+nav button:last-child{border-right:0}
+nav button small{display:block;font-family:var(--body);font-weight:600;font-size:9.5px;letter-spacing:.06em;margin-top:4px;opacity:.8}
+nav button[aria-selected="true"]{color:#111}
+nav button[data-deck="q"][aria-selected="true"]{background:var(--m1)}
+nav button[data-deck="c"][aria-selected="true"]{background:var(--m2);color:#fff}
+nav button[data-deck="b"][aria-selected="true"]{background:var(--m3);color:#fff}
+nav button[data-deck="s"][aria-selected="true"]{background:var(--m4);color:#fff}
+nav button:focus-visible{outline:3px solid var(--ink);outline-offset:-3px}
+
+/* karta */
+.card{
+  background:var(--card);border:2px solid var(--ink);position:relative;
+  box-shadow:5px 5px 0 rgba(23,24,28,.16);min-height:210px;display:flex;flex-direction:column;
+}
+.card .bar{
+  background:var(--accent,#999);color:#111;padding:7px 12px 6px;display:flex;
+  justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--ink);
+  font-family:var(--disp);font-weight:700;text-transform:uppercase;
+}
+.card .bar .name{font-size:21px;line-height:1;letter-spacing:.02em}
+.card .bar .name span{font-family:var(--body);font-weight:600;font-size:10px;letter-spacing:.08em;opacity:.7;display:block;margin-top:2px}
+.card .bar .id{font-family:var(--mono);font-size:13px;font-weight:400}
+.card .body{padding:20px 18px;flex:1;display:flex;flex-direction:column;justify-content:center}
+.card .text{font-size:21px;line-height:1.32;font-weight:500}
+.card .text em{font-style:normal;background:linear-gradient(transparent 62%,rgba(242,183,5,.55) 62%)}
+.card .meta{margin-top:16px;padding-top:11px;border-top:1px dashed var(--rule);display:flex;gap:10px;
+  justify-content:space-between;align-items:center;font-family:var(--mono);font-size:11px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+.card .pts{background:var(--ink);color:var(--card);padding:3px 8px;font-weight:700;letter-spacing:.04em}
+.card.empty .body{color:var(--ink-soft);justify-content:center;text-align:center}
+.card.drawn{animation:stamp .18s cubic-bezier(.2,.9,.3,1.4)}
+@keyframes stamp{from{transform:scale(.965) rotate(-.4deg);opacity:.4}to{transform:none;opacity:1}}
+
+/* ovládání */
+.draw{
+  width:100%;margin-top:14px;padding:17px;border:2px solid var(--ink);background:var(--ink);color:var(--paper);
+  font-family:var(--disp);font-weight:700;font-size:25px;text-transform:uppercase;letter-spacing:.06em;
+  cursor:pointer;box-shadow:5px 5px 0 rgba(23,24,28,.16);
+}
+.draw:active{transform:translate(3px,3px);box-shadow:2px 2px 0 rgba(23,24,28,.16)}
+.draw:disabled{background:#B9B8AE;border-color:#8E8D84;color:#6A695F;box-shadow:none;cursor:default}
+.draw:focus-visible{outline:3px solid var(--m2);outline-offset:3px}
+.row{display:flex;gap:9px;align-items:center;margin-top:11px;flex-wrap:wrap}
+.counter{font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--ink-soft);flex:1;min-width:120px}
+.ghost{
+  appearance:none;background:transparent;border:1.5px solid var(--ink);color:var(--ink);
+  font-family:var(--mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  padding:7px 11px;cursor:pointer;
+}
+.ghost:hover{background:var(--ink);color:var(--paper)}
+.ghost:focus-visible{outline:2px solid var(--m2);outline-offset:2px}
+
+/* filtry kategorií */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}
+.chip{
+  appearance:none;border:1.5px solid var(--rule);background:transparent;color:var(--ink-soft);
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+  padding:6px 9px;cursor:pointer;
+}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.chip:focus-visible{outline:2px solid var(--m2);outline-offset:2px}
+
+/* sekce */
+h2{font-family:var(--disp);font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.16em;
+  margin:30px 0 9px;padding-bottom:5px;border-bottom:2px solid var(--ink)}
+.hist{list-style:none;margin:0;padding:0;font-size:14px}
+.hist li{padding:7px 0;border-bottom:1px solid var(--rule);display:flex;gap:9px}
+.hist li b{font-family:var(--mono);font-size:11px;font-weight:400;color:var(--ink-soft);flex:0 0 42px;padding-top:2px}
+.hist .none{color:var(--ink-soft);font-style:italic;border:0}
+
+/* checklist sošek */
+.list{list-style:none;margin:0;padding:0}
+.list li{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--rule)}
+.list .nm{flex:1;font-size:15px;line-height:1.25}
+.list .nm i{display:block;font-style:normal;font-size:11.5px;color:var(--ink-soft);margin-top:2px}
+.list .p{font-family:var(--mono);font-size:12px;color:var(--ink-soft);flex:0 0 30px;text-align:right}
+.claim{display:flex;gap:4px;flex:0 0 auto}
+.claim button{
+  width:32px;height:32px;border:1.5px solid var(--rule);background:transparent;
+  font-family:var(--disp);font-weight:700;font-size:16px;cursor:pointer;color:var(--ink-soft);
+}
+.claim button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.claim button:focus-visible{outline:2px solid var(--m2);outline-offset:2px}
+li.taken .nm{opacity:.45;text-decoration:line-through}
+
+/* skóre */
+.score{position:fixed;left:0;right:0;bottom:0;background:var(--ink);color:var(--paper);
+  display:flex;z-index:20;padding-bottom:env(safe-area-inset-bottom)}
+.score div{flex:1;display:flex;align-items:center;justify-content:center;gap:9px;padding:9px 6px}
+.score div+div{border-left:1px solid rgba(255,255,255,.22)}
+.score .lbl{font-family:var(--disp);font-weight:700;font-size:16px;text-transform:uppercase;letter-spacing:.08em}
+.score .val{font-family:var(--mono);font-size:20px;font-weight:700;min-width:44px;text-align:center}
+.score button{width:30px;height:30px;border:1px solid rgba(255,255,255,.45);background:transparent;
+  color:var(--paper);font-size:17px;line-height:1;cursor:pointer;font-family:var(--mono)}
+.score button:focus-visible{outline:2px solid var(--m1);outline-offset:2px}
+.note{font-size:12.5px;color:var(--ink-soft);margin-top:9px;line-height:1.5}
+.hidden{display:none}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* tisk: všechny karty na papír k rozstříhání */
+@media print{
+  header,nav,.draw,.row,.chips,.score,.note,#hist-sec,#app{display:none!important}
+  body{background:#fff;font-size:11px}
+  .wrap{max-width:none;padding:0}
+  #print{display:block!important}
+  .sheet{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  .pc{border:1px dashed #999;padding:9px;min-height:150px;page-break-inside:avoid}
+  .pc .h{font-family:var(--disp);font-weight:700;text-transform:uppercase;font-size:12px;
+    border-bottom:1px solid #000;padding-bottom:3px;margin-bottom:7px;display:flex;justify-content:space-between}
+  .pc .t{font-size:13px;line-height:1.3}
+  .pc .m{margin-top:7px;font-family:var(--mono);font-size:9px;color:#555}
+}
+#print{display:none}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<header>
+  <div class="kicker">Kolo · kártyagenerátor</div>
+  <h1>Budapest<br>Grand Prix</h1>
+  <div class="sub">Čtyři balíčky, čtyři linky metra. Karta se nevrací, dokud nezamícháš.</div>
+</header>
+
+<nav role="tablist" aria-label="Balíčky">
+  <button data-deck="q" role="tab" aria-selected="true">Kérdés<small>OTÁZKY</small></button>
+  <button data-deck="c" role="tab" aria-selected="false">Átok<small>PROKLETÍ</small></button>
+  <button data-deck="b" role="tab" aria-selected="false">Feladat<small>ÚKOLY</small></button>
+  <button data-deck="s" role="tab" aria-selected="false">Szobor<small>SOŠKY</small></button>
+</nav>
+
+<div id="app">
+  <div class="card empty" id="card">
+    <div class="bar"><div class="name">—</div><div class="id"></div></div>
+    <div class="body"><div class="text">Vyber balíček a táhni.</div></div>
+  </div>
+
+  <button class="draw" id="drawBtn">Húz — táhnout</button>
+
+  <div class="row">
+    <div class="counter" id="counter"></div>
+    <button class="ghost" id="shuffleBtn">Zamíchat</button>
+    <button class="ghost" id="anyBtn">Cokoliv</button>
+  </div>
+
+  <div class="chips" id="chips"></div>
+
+  <section id="hist-sec">
+    <h2>Poslední tažené</h2>
+    <ul class="hist" id="hist"><li class="none">Zatím nic.</li></ul>
+  </section>
+</div>
+
+<div id="statues" class="hidden">
+  <h2>Kolodko — 29 sošek</h2>
+  <div class="counter" id="stProgress" style="margin-bottom:8px"></div>
+  <ul class="list" id="stList"></ul>
+</div>
+
+<p class="note" id="note"></p>
+</div>
+
+<div class="score">
+  <div><span class="lbl">Tým A</span><button data-t="a" data-d="-1" aria-label="Ubrat A">−</button><span class="val" id="sa">0</span><button data-t="a" data-d="1" aria-label="Přidat A">+</button></div>
+  <div><span class="lbl">Tým B</span><button data-t="b" data-d="-1" aria-label="Ubrat B">−</button><span class="val" id="sb">0</span><button data-t="b" data-d="1" aria-label="Přidat B">+</button></div>
+</div>
+
+<div id="print"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   DATA — tady se edituje. Přidat kartu = přidat řádek do pole.
+   q = otázky, c = prokletí, b = úkoly (body), s = sošky (body)
+   ═══════════════════════════════════════════════════════════════ */
+const DECKS = {
+q:{ name:'Kérdés', cs:'Otázka', pre:'K', color:'var(--m1)', cards:[
+ {t:'Jsi ve stejném <em>kerületu</em> (obvodu) jako já?', k:'Shoda', n:'ano/ne'},
+ {t:'Jsi na stejné straně Dunaje jako já?', k:'Shoda', n:'ano/ne'},
+ {t:'Je nejbližší most k tobě stejný jako nejbližší most ke mně?', k:'Shoda', n:'ano/ne'},
+ {t:'Je nejbližší linka metra k tobě stejná jako ke mně?', k:'Shoda', n:'ano/ne'},
+ {t:'Je nejbližší tržnice k tobě stejná jako ke mně?', k:'Shoda', n:'ano/ne'},
+ {t:'Jsi uvnitř Nagykörútu (tram 4/6)? Já jsem <em>uvnitř / vně</em> — odpověz podle sebe.', k:'Shoda', n:'ano/ne'},
+ {t:'Je poslední číslice popisného čísla nejbližší budovy sudá?', k:'Shoda', n:'ano/ne'},
+ {t:'Jsi do <em>1 km</em> vzdušnou čarou ode mě?', k:'Radar', n:'ano/ne'},
+ {t:'Jsi do <em>3 km</em> vzdušnou čarou ode mě?', k:'Radar', n:'ano/ne'},
+ {t:'Jsi do 500 m od nějaké stanice metra?', k:'Radar', n:'ano/ne'},
+ {t:'Jsi blíž k Dunaji než 400 m?', k:'Radar', n:'ano/ne'},
+ {t:'Jsi blíž k Parlamentu než já?', k:'Srovnání', n:'ano/ne'},
+ {t:'Jsi blíž k Deák Ferenc tér než já?', k:'Srovnání', n:'ano/ne'},
+ {t:'Jsi výš nad mořem než já?', k:'Srovnání', n:'ano/ne'},
+ {t:'Jsi severněji než já?', k:'Srovnání', n:'ano/ne'},
+ {t:'Bylo by z tvého úkrytu na Keleti rychlejší dojet metrem, nebo dojít pěšky?', k:'Srovnání', n:'volná odpověď'},
+ {t:'Přesuň se nejdřív <em>min. 400 m</em>. Přiblížil jsem se, nebo vzdálil?', k:'Teploměr', n:'tepleji/chladněji'},
+ {t:'Vyfoť <em>nejvyšší budovu</em>, kterou vidíš. Jen ji, bez okolí.', k:'Foto', n:'do 3 minut'},
+ {t:'Vyfoť nejbližší kus zeleně.', k:'Foto', n:'do 3 minut'},
+ {t:'Vyfoť nejbližší dopravní značku nebo ceduli. Bez čitelného názvu ulice.', k:'Foto', n:'do 3 minut'},
+ {t:'Vyfoť nejbližší věc <em>starší než sto let</em>.', k:'Foto', n:'do 3 minut'},
+ {t:'Otoč se přesně na sever a vyfoť, co vidíš.', k:'Foto', n:'do 3 minut'},
+ {t:'Vyfoť kus nebe. Jen nebe.', k:'Foto', n:'do 3 minut'},
+ {t:'Ze všech stanic metra do 1,5 km od tebe — u které jsi <em>nejblíž</em>?', k:'Chapadla', n:'1× za kolo'},
+ {t:'Ze všech mostů přes Dunaj — kterému jsi <em>nejblíž</em>?', k:'Chapadla', n:'1× za kolo'},
+]},
+c:{ name:'Átok', cs:'Prokletí', pre:'Á', color:'var(--m2)', cards:[
+ {t:'<em>Prokletí kisfröccse.</em> Každý si kupte fröccs a vypijte ho, než položíte další otázku. Kdo nepije, kupuje si limonádu — s fotkou.', k:'Zdržení'},
+ {t:'<em>Prokletí Mekka Eleka.</em> Příštích 15 minut se smíte pohybovat jen ve směru, který ukazuje první dopravní značka, kterou uvidíte.', k:'Pohyb'},
+ {t:'<em>Prokletí eskalátoru.</em> Najeďte celý eskalátor na M3 nebo M4 — nahoru i dolů — než se zeptáte.', k:'Zdržení'},
+ {t:'<em>Prokletí Kolodka.</em> Než položíte další otázku, musíte vyfotit libovolnou minisošku.', k:'Zdržení'},
+ {t:'<em>Prokletí M1.</em> Příštích 20 minut se smíte vézt pouze žlutou linkou. Je z roku 1896 a je to znát.', k:'Pohyb'},
+ {t:'<em>Prokletí sudého čísla.</em> Dalších 10 minut nesmíte vstoupit do budovy ani vozu se sudým číslem.', k:'Pohyb'},
+ {t:'<em>Prokletí tichého poutníka.</em> 10 minut spolu nesmíte mluvit. Psát ano.', k:'Handicap'},
+ {t:'<em>Prokletí paprikové daně.</em> Kupte v nejbližším obchodě papriku a noste ji do konce kola viditelně v ruce.', k:'Handicap'},
+ {t:'<em>Prokletí turisty.</em> Nechte se vyfotit cizím člověkem, kterého o to požádáte maďarsky.', k:'Handicap'},
+ {t:'<em>Prokletí rozdělení.</em> Dalších 15 minut musíte být od sebe navzájem minimálně 300 m.', k:'Handicap'},
+ {t:'<em>Prokletí Duchampa.</em> Pošlete fotku něčeho ošklivého a tři věty o tom, proč je to ve skutečnosti umění.', k:'Zdržení'},
+ {t:'<em>Prokletí zpátečky.</em> Vaše příští jízda MHD musí být opačným směrem, než potřebujete. Minimálně dvě zastávky.', k:'Pohyb'},
+]},
+b:{ name:'Feladat', cs:'Úkol', pre:'F', color:'var(--m3)', cards:[
+ {t:'Projeď celou M1 (Vörösmarty tér ↔ Mexikói út) a vyfoť stanici, která si nejvíc zachovala původní obklad z roku 1896.', k:'Doprava', p:6},
+ {t:'Sikló nahoru, pěšky dolů.', k:'Doprava', p:5},
+ {t:'Tramvají 2 po nábřeží mezi Jászai Mari tér a Fővám tér. Natoč 10 s úseku s Parlamentem.', k:'Doprava', p:4},
+ {t:'Zubačkou (tram 60) z Városmajor nahoru na Széchenyi-hegy.', k:'Doprava', p:10},
+ {t:'Gyermekvasút — dětská železnice, provozovaná dětmi. Aspoň jedna zastávka.', k:'Výprava', p:15},
+ {t:'Libegő na János-hegy a nahoru na Erzsébet-kilátó. Nejvyšší bod Budapešti.', k:'Výprava', p:12},
+ {t:'Přejdi pěšky most, po kterém jsi dnes ještě nešel. Každý další nový most +3.', k:'Doprava', p:3},
+ {t:'<em>Szabadság tér — trojí paměť.</em> Vyfoť sovětský pomník, sochu Reagana a pomník z roku 2014 včetně protipomníku Eleven Emlékmű. Napiš čtyři věty o tom, proč ten protipomník existuje.', k:'Pozorování', p:8},
+ {t:'Vajdahunyad: najdi a odděleně vyfoť románskou, gotickou, renesanční a barokní část. Je to úmyslná koláž z roku 1896.', k:'Pozorování', p:7},
+ {t:'Filozófusok kertje na Gellértu: identifikuj všech pět postav v kruhu a napiš, co mají společného.', k:'Pozorování', p:6},
+ {t:'Vyjeď na střechu parkovacího domu na Szervita tér a vyfoť odtud Lechnerovu Poštovní spořitelnu. Ze země ji neuvidíš.', k:'Pozorování', p:7},
+ {t:'Anonymus ve Városligetu. Vyfoť pero. Vysvětli, proč je vyleštěné.', k:'Pozorování', p:5},
+ {t:'Nagyvásárcsarnok: seřaď maďarské stupně mleté papriky (különleges, csemege, édesnemes, rózsa, erős) od nejjemnější po nejostřejší. Ověř u prodavače.', k:'Pozorování', p:6},
+ {t:'Najdi v centru dva domy s dochovanými stopami po střelbě z roku 1956.', k:'Pozorování', p:5},
+ {t:'Vyfoť ceduli s názvem ulice, která se za socialismu jmenovala jinak. Zjisti jak.', k:'Pozorování', p:4},
+ {t:'Objednej kompletní jídlo pro dva výhradně maďarsky. Video jako důkaz. Bez angličtiny, bez ukazování.', k:'Lidé', p:6},
+ {t:'Nech si od místního vysvětlit rozdíl mezi pálinkou a párlatem.', k:'Lidé', p:5},
+ {t:'Zahraj partii šachu s cizím člověkem. Vyhrát není povinné. Vyhrát = +7.', k:'Lidé', p:8},
+ {t:'Nauč se větu, kterou ti napíše soupeřící tým (max. 8 slov, z maďarského menu nebo cedule), a správně ji vyslov.', k:'Lidé', p:4},
+ {t:'Zjisti od tří místních jejich tip na nejlepší lángos. Pokud se dva shodnou, jdi tam.', k:'Lidé', p:6},
+ {t:'Lángos. Zakysaná smetana a sýr. Chuťově diskutabilní, kulturně povinné.', k:'Konzum', p:4},
+ {t:'Kürtőskalács. A zjisti, proč je vlastně sedmihradský, ne maďarský.', k:'Konzum', p:4},
+ {t:'Unicum. Popiš chuť třemi přídavnými jmény, z nichž ani jedno nesmí být „hnusný“.', k:'Konzum', p:5},
+ {t:'<em>Fröccs Taxonomy.</em> Napiš odhad poměru víno : soda u pěti druhů, pak ověř u barmana. Bod za každý správný.', k:'Konzum', p:6},
+ {t:'Objednej si v ruin baru něco, co jsi nikdy neměl, a nezeptej se, co to je.', k:'Konzum', p:3},
+ {t:'Rudas — osmiúhelníkový turecký bazén z 16. století. Ověř si dny podle pohlaví.', k:'Voda', p:10},
+ {t:'Széchenyi, venkovní bazén. Povinná fotka s hráči šachu.', k:'Voda', p:8},
+ {t:'Gellért. I jen vstupní secesní hala je zážitek.', k:'Voda', p:8},
+ {t:'Cipők a Duna-parton. Nefoť se u toho. Jen tam chvíli stůj.', k:'Bez bodů', p:0},
+ {t:'Pokuta: kdo dnes zaplatí za pivo víc než 2 500 Ft, dostává −5 za turistickou naivitu.', k:'Penalizace', p:-5},
+]},
+s:{ name:'Szobor', cs:'Soška', pre:'Sz', color:'var(--m4)', cards:[
+ {t:'Rubikova kostka', k:'Bem rakpart, výklenek u schodů poblíž Batthyány tér', p:3},
+ {t:'Főkukac', k:'Bem rakpart 15, zídka čelem k řece — úplně první Kolodko', p:3},
+ {t:'Smutný tank', k:'Bem rakpart, zeď u metra Batthyány tér', p:4},
+ {t:'Potápěč', k:'Dohány u. 53 / roh Osvát u., na hydrantu', p:4},
+ {t:'Herzl s kolem', k:'Dohány u. 1, na lampě u synagogy', p:3},
+ {t:'Sekera', k:'Szabadság tér, u sovětského pomníku', p:5},
+ {t:'Kermit', k:'Szabadság tér, u plotu kavárenské terasy', p:3},
+ {t:'Süsü', k:'Szabadság tér, u bývalé budovy MTV', p:3},
+ {t:'Mrtvá veverka', k:'Falk Miksa u. / Szt. István krt., za sochou Columba', p:4},
+ {t:'Měsíční vozítko', k:'Hold utca 12, na patníku', p:5},
+ {t:'Medvídek Mr. Beana', k:'Harmincad u. 6, fasáda bývalé britské ambasády', p:4},
+ {t:'Balónkový pes', k:'Belgrád rakpart, zídka u Řetězového mostu', p:3},
+ {t:'Ferenc József v houpací síti', k:'Szabadság híd, kování pilíře na pešťské straně', p:5},
+ {t:'Lisa Simpson jako Johanka z Arku', k:'Fővám tér 13, sloup tramvajové zastávky', p:4},
+ {t:'Yoda', k:'M4 Szent Gellért tér, u eskalátorů', p:4},
+ {t:'Kostkouchý králík', k:'Szent György tér, zeď nahoře u lanovky', p:4},
+ {t:'Statler & Waldorf', k:'Clark Ádám tér, zábradlí nad tunelem', p:4},
+ {t:'Nincs kompót', k:'Ybl Miklós tér, zeď Várkert Bazár — otevři dvířka', p:6},
+ {t:'Lecsó', k:'Döbrentei tér, budínská hlava Alžbětina mostu', p:4},
+ {t:'Mekk Elek', k:'Széll Kálmán tér, u schodů a cyklostezky', p:4},
+ {t:'Dracula', k:'Városliget, zadní výklenek Vajdahunyad', p:5},
+ {t:'Pisoár', k:'Városliget, dlažba u Vajdahunyad', p:5},
+ {t:'Stalinovy boty + Among Us', k:'Dózsa György út 35, promenáda Národopisného muzea', p:6},
+ {t:'Micimackó', k:'Damjanich u. 27, fasáda', p:4},
+ {t:'Garfield', k:'Dembinszky u. 4, hrana chodníku', p:4},
+ {t:'Hanna Szenes', k:'Roh Jósika u. a Rózsa u.', p:5},
+ {t:'Alfa Romeo', k:'Hevesi Sándor tér 4, patník před divadlem', p:5},
+ {t:'Ruská válečná loď', k:'Moszkva sétány, kamenný blok u nábřeží', p:6},
+ {t:'Sluchátka', k:'Komor Marcell u. 1, před MÜPA — fungují', p:6},
+]}
+};
+
+/* ═══════════════ LOGIKA ═══════════════ */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+let S={deck:'q',used:{q:[],c:[],b:[],s:[]},hist:[],filt:[],claim:{},a:0,b:0};
+
+/* stav v URL — přežije refresh, nepoužívá žádné úložiště prohlížeče */
+function save(){try{history.replaceState(null,'','#'+encodeURIComponent(JSON.stringify(S)))}catch(e){}}
+function load(){try{const h=location.hash.slice(1);if(h)S=Object.assign(S,JSON.parse(decodeURIComponent(h)))}catch(e){}}
+
+const cats=d=>[...new Set(DECKS[d].cards.map(c=>c.k))];
+const pool=d=>DECKS[d].cards.map((c,i)=>i)
+  .filter(i=>!S.used[d].includes(i))
+  .filter(i=>d!=='q'||!S.filt.length||S.filt.includes(DECKS[d].cards[i].k));
+
+function renderCard(d,i){
+  const c=DECKS[d].cards[i], D=DECKS[d], el=$('#card');
+  el.className='card drawn'; el.style.setProperty('--accent',D.color);
+  const dark=d!=='q';
+  el.querySelector('.bar').style.color=dark?'#fff':'#111';
+  el.querySelector('.bar').innerHTML=
+    `<div class="name">${D.name}<span>${D.cs}</span></div><div class="id">${D.pre}-${String(i+1).padStart(2,'0')}</div>`;
+  el.querySelector('.body').innerHTML=
+    `<div class="text">${c.t}</div><div class="meta"><span>${c.k}</span>${
+      c.n?`<span>${c.n}</span>`:''}${c.p!==undefined?`<span class="pts">${c.p} P</span>`:''}</div>`;
+  setTimeout(()=>el.classList.remove('drawn'),200);
+}
+
+function draw(d){
+  const p=pool(d); if(!p.length)return;
+  const i=p[Math.floor(Math.random()*p.length)];
+  S.used[d].push(i);
+  S.hist.unshift({d,i}); S.hist=S.hist.slice(0,8);
+  renderCard(d,i); update();
+}
+
+function update(){
+  const d=S.deck, D=DECKS[d];
+  $$('nav button').forEach(b=>b.setAttribute('aria-selected',b.dataset.deck===d));
+  const isS=d==='s';
+  $('#app').classList.toggle('hidden',isS);
+  $('#statues').classList.toggle('hidden',!isS);
+  if(isS){renderStatues()}
+  else{
+    const left=pool(d).length, tot=D.cards.length;
+    $('#counter').textContent=`zbývá ${left} z ${tot}`;
+    $('#drawBtn').disabled=!left;
+    $('#drawBtn').textContent=left?'Húz — táhnout':'Balíček je prázdný';
+    $('#chips').innerHTML = d==='q'
+      ? cats('q').map(k=>`<button class="chip" data-k="${k}" aria-pressed="${S.filt.includes(k)}">${k}</button>`).join('')
+      : '';
+    $('#hist').innerHTML = S.hist.length
+      ? S.hist.map(h=>`<li><b>${DECKS[h.d].pre}-${String(h.i+1).padStart(2,'0')}</b><span>${
+          DECKS[h.d].cards[h.i].t.replace(/<[^>]+>/g,'')}</span></li>`).join('')
+      : '<li class="none">Zatím nic.</li>';
+  }
+  $('#sa').textContent=S.a; $('#sb').textContent=S.b;
+  $('#note').textContent = isS
+    ? 'Klepnutím na A nebo B přiřadíš sošku týmu a body se připíšou do skóre.'
+    : 'Stav (skóre, tažené karty, sošky) drží adresa v prohlížeči — refresh ho nesmaže, ale nový tab ano. Chceš stejný stav na druhém telefonu? Pošli si odkaz.';
+  save();
+}
+
+function renderStatues(){
+  const cs=DECKS.s.cards;
+  const done=Object.keys(S.claim).length;
+  $('#stProgress').textContent=`nalezeno ${done} z ${cs.length} · ${
+    cs.reduce((a,c,i)=>a+(S.claim[i]?c.p:0),0)} P rozděleno`;
+  $('#stList').innerHTML=cs.map((c,i)=>`<li class="${S.claim[i]?'taken':''}">
+    <div class="nm">${c.t}<i>${c.k}</i></div><div class="p">${c.p} P</div>
+    <div class="claim">
+      <button data-i="${i}" data-t="a" aria-pressed="${S.claim[i]==='a'}" aria-label="Tým A">A</button>
+      <button data-i="${i}" data-t="b" aria-pressed="${S.claim[i]==='b'}" aria-label="Tým B">B</button>
+    </div></li>`).join('');
+}
+
+/* události */
+$$('nav button').forEach(b=>b.onclick=()=>{S.deck=b.dataset.deck;update()});
+$('#drawBtn').onclick=()=>draw(S.deck);
+$('#shuffleBtn').onclick=()=>{
+  if(S.deck==='s'){if(confirm('Vynulovat všechny sošky a jejich body?')){
+    Object.keys(S.claim).forEach(i=>{const t=S.claim[i];S[t]-=DECKS.s.cards[i].p});S.claim={}}}
+  else S.used[S.deck]=[];
+  update();
+};
+$('#anyBtn').onclick=()=>{
+  const ds=['q','c','b'].filter(d=>pool(d).length); if(!ds.length)return;
+  S.deck=ds[Math.floor(Math.random()*ds.length)]; draw(S.deck);
+};
+$('#chips').onclick=e=>{
+  const b=e.target.closest('.chip'); if(!b)return;
+  const k=b.dataset.k;
+  S.filt=S.filt.includes(k)?S.filt.filter(x=>x!==k):[...S.filt,k];
+  update();
+};
+$('#stList').onclick=e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  const i=b.dataset.i, t=b.dataset.t, p=DECKS.s.cards[i].p, prev=S.claim[i];
+  if(prev)S[prev]-=p;
+  if(prev===t){delete S.claim[i]}else{S.claim[i]=t;S[t]+=p}
+  update();
+};
+$$('.score button').forEach(b=>b.onclick=()=>{S[b.dataset.t]+=+b.dataset.d;update()});
+
+/* tiskový arch */
+$('#print').innerHTML=Object.entries(DECKS).map(([d,D])=>
+  `<div class="sheet">${D.cards.map((c,i)=>`<div class="pc">
+    <div class="h"><span>${D.name}</span><span>${D.pre}-${String(i+1).padStart(2,'0')}</span></div>
+    <div class="t">${c.t}</div>
+    <div class="m">${c.k}${c.p!==undefined?' · '+c.p+' P':''}</div></div>`).join('')}</div>`).join('');
+
+load(); update();
+</script>
+</body>
+</html>
